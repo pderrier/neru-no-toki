@@ -57,46 +57,6 @@ Some period-correct techniques and habits you will spot here that feel almost al
 - `Hardcoded Reality`: specific compilers, specific sound libs, specific machine setup, sometimes specific drive letters. Portability was not invited.
 - `Reboot As Debugger`: run it, see if it works, and if it hangs the machine, that was also valid feedback.
 
-## Build
-
-**Requires:** CMake ≥ 3.16, a C99 compiler, SDL2 + SDL2_mixer development libraries.
-
-### Windows (vcpkg)
-
-```powershell
-git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
-C:\vcpkg\bootstrap-vcpkg.bat
-C:\vcpkg\vcpkg install sdl2:x64-windows sdl2-mixer:x64-windows
-
-cd <this-repo>
-cmake -B build -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
-cmake --build build --config Release
-```
-
-### Windows (MSYS2 / MinGW)
-
-```bash
-pacman -S mingw-w64-x86_64-SDL2 mingw-w64-x86_64-SDL2_mixer mingw-w64-x86_64-cmake
-cmake -B build -G "MinGW Makefiles"
-cmake --build build
-```
-
-### Linux / WSL
-
-```bash
-sudo apt-get install build-essential cmake libsdl2-dev libsdl2-mixer-dev
-cmake -B build
-cmake --build build
-```
-
-### macOS
-
-```bash
-brew install sdl2 sdl2_mixer cmake
-cmake -B build
-cmake --build build
-```
-
 ## Run
 
 Each demo is a standalone executable. **Run from the repo root** (or make sure the `data/` folder is next to the executable) so the music files are found.
@@ -193,6 +153,21 @@ LICENSE
 | Turbo C `lib13h.h` / `modex.h` | `demo_framework.h` |
 | PCX image loading | `load_pcx()` in framework |
 
+### Fidelity note
+
+The port aims for effect fidelity, not hardware-exact emulation. For the shared effects, here is what changed and what stayed:
+
+| Original DOS world | Modern port | What stayed faithful |
+|---|---|---|
+| VGA / Mode X / PTC framebuffer code | SDL2 software framebuffer + texture upload | The effect logic, screen composition, and overall look |
+| Hardware palette writes and page flipping | Software palette conversion and modern presentation | Palette-driven rendering ideas, fades, flames, and indexed-color style behavior |
+| VBL polling and CPU-speed-dependent pacing | SDL timing and VSync where available | Scene flow and interactive behavior, without pretending to match old hardware timing exactly |
+| Inline x86 assembly inner loops | Portable C99 rewrites | Same algorithms and dataflow, but not the exact original instruction stream |
+| DOS sound drivers and interrupt-driven playback | SDL2_mixer music playback | The original tracker modules and their role in the demo structure |
+| Shared effect code tied to one DOS codebase and global state | Shared portable helpers and per-demo integration | The same family of tricks: lookup tables, low-res shortcuts, fixed-point style thinking, and software rendering |
+
+So the target is "same effect, same spirit, same bag of tricks", not a cycle-perfect clone of a 1999 DOS PC.
+
 ## Credits
 
 - **WondY** / **ZeN** — original DOS code and music (1996–1999)
@@ -201,3 +176,43 @@ LICENSE
 ## License
 
 [MIT](LICENSE)
+
+## Build
+
+**Requires:** CMake ≥ 3.16, a C99 compiler, SDL2 + SDL2_mixer development libraries.
+
+### Windows (vcpkg)
+
+```powershell
+git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+C:\vcpkg\bootstrap-vcpkg.bat
+C:\vcpkg\vcpkg install sdl2:x64-windows sdl2-mixer:x64-windows
+
+cd <this-repo>
+cmake -B build -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
+cmake --build build --config Release
+```
+
+### Windows (MSYS2 / MinGW)
+
+```bash
+pacman -S mingw-w64-x86_64-SDL2 mingw-w64-x86_64-SDL2_mixer mingw-w64-x86_64-cmake
+cmake -B build -G "MinGW Makefiles"
+cmake --build build
+```
+
+### Linux / WSL
+
+```bash
+sudo apt-get install build-essential cmake libsdl2-dev libsdl2-mixer-dev
+cmake -B build
+cmake --build build
+```
+
+### macOS
+
+```bash
+brew install sdl2 sdl2_mixer cmake
+cmake -B build
+cmake --build build
+```
