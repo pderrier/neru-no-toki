@@ -1,0 +1,6 @@
+file nnt.obj,m3d\proc.obj
+library midas\midas.lib
+library ptc\ptc.lib
+system dos4g
+option stack=256k
+
