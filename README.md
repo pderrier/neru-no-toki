@@ -6,6 +6,57 @@ These demos were created by **WondY** and **ZeN** and originally ran in VGA Mode
 
 This port preserves the original algorithms — the inline x86 assembly has been rewritten in plain C, all hardware-specific code (VGA registers, BIOS interrupts, DOS extenders) has been replaced by SDL2, and the original tracker music now plays via SDL2_mixer.
 
+## Technical context
+
+### No GPU, only pain
+
+Late-90s DOS demo coding meant one thing: the CPU did everything. No shaders, no OpenGL, no safety net. Every pixel was computed in software, usually into a framebuffer in RAM, then blasted to VGA memory as fast as possible before the next frame showed up.
+
+That is the world behind `01_flames`, `02_fraktal`, `05_shadebob`, `09_sinewave`, and `10_plasma`: not "effects plugins", just raw pixel pushing with a lot of attitude.
+
+### Fast Or Dead
+
+If something was expensive, you cheated. Trig became lookup tables. Floats became fixed-point. Full-screen rendering became low-res rendering plus interpolation. Recomputing became incrementing.
+
+That is why `06_tunnel` uses precalculated addressing, `11_voxel` is basically a smart column renderer, `13_rotozoom` walks texture coordinates incrementally, and `16_nnt` squeezes complex raycast scenes out of low-res buffers and reconstruction tricks.
+
+### RAM Was A Feature
+
+Memory was tight, but CPU time was tighter. So coders happily burned kilobytes, sometimes megabytes, on sine tables, palette ramps, blur maps, distortion fields, heightmaps, and anything else that could save cycles in the inner loop.
+
+You can see that mindset all over `08_wobbler`, `11_voxel`, `12_particles`, `14_w3d`, and the larger `16_nnt` parts: precompute first, stream linearly, pray for cache, ship the effect.
+
+### ASM In The Basement
+
+Hot loops were often handwritten in x86 assembly because compilers were not trusted to do the right thing when every cycle mattered. Register usage, memory access, and instruction ordering were part of the art form.
+
+So when these effects look unexpectedly smooth on period hardware, that was usually not magic. It was tables, integer math, tiny buffers, dirty tricks, and a coder staring at the same inner loop until it finally stopped being too slow.
+
+### Music Was Code Too
+
+The `.XM` and `.MOD` files in `data/` are tracker modules: samples plus note/effect patterns, not recorded audio. They were compact, flexible, and perfect for demos. A playback library such as MIDAS or USMPlay mixed them in software while the main code was still busy drawing pixels.
+
+That is why the music is not just background. In `16_nnt` especially, it is part of the structure. Scene timing, mood changes, and transitions are built around the module timeline, just like in the original productions.
+
+### Why It Looks Like This
+
+Flames, plasmas, tunnels, voxels, particles, rotozooms, and software 3D were not just aesthetic choices. They were the shapes that looked great when your real tools were a 486, a framebuffer, a tracker module, and a slightly unreasonable amount of persistence.
+
+### Museum Highlights
+
+Some period-correct techniques and habits you will spot here that feel almost alien today:
+
+- `Framebuffer First`: draw into memory first, then slam the result to the screen. No scene graph, no GPU pipeline, no abstraction tower.
+- `Palette Wizardry`: in 8-bit modes, changing colors in the palette could animate the whole screen "for free". Great for flames, fades, and fake lighting.
+- `Table All The Things`: sine, cosine, blur offsets, tunnel maps, distortion fields. If a value could be precomputed once, it probably was.
+- `Fixed-Point Supremacy`: integer adds and shifts were often a better life choice than floating point.
+- `Low-Res, High Impact`: many expensive effects were rendered small, then stretched, blurred, or interpolated to full screen.
+- `One Big Ball Of Globals`: one file full of globals, one giant translation unit, and very little concern for architectural elegance.
+- `ASM In Case Of Emergency`: not everywhere, just in the loops that were actively ruining the framerate.
+- `Music vs CPU`: the soundtrack kept mixing while the main loop was busy drawing, which means visuals and audio were literally competing for CPU time.
+- `Hardcoded Reality`: specific compilers, specific sound libs, specific machine setup, sometimes specific drive letters. Portability was not invited.
+- `Reboot As Debugger`: run it, see if it works, and if it hangs the machine, that was also valid feedback.
+
 ## Build
 
 **Requires:** CMake ≥ 3.16, a C99 compiler, SDL2 + SDL2_mixer development libraries.
