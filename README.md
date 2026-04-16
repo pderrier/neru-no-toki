@@ -57,20 +57,6 @@ Some period-correct techniques and habits you will spot here that feel almost al
 - `Hardcoded Reality`: specific compilers, specific sound libs, specific machine setup, sometimes specific drive letters. Portability was not invited.
 - `Reboot As Debugger`: run it, see if it works, and if it hangs the machine, that was also valid feedback.
 
-## Run
-
-Each demo is a standalone executable. **Run from the repo root** (or make sure the `data/` folder is next to the executable) so the music files are found.
-
-```bash
-# Linux / WSL / macOS
-./build/01_flames
-
-# Windows
-build\Release\01_flames.exe
-```
-
-Press **Escape** to quit any demo.
-
 ## Demos
 
 ### Neru No Toki — "Le moment ou l'on se repose" (ZeN, 1999)
@@ -111,6 +97,24 @@ Almost presented at [Volcanic 5](https://demozoo.org/parties/739/) (Cournon-d'Au
 | 15 | `rat` | Autonomous maze agent | ZINZIN.XM | WondY / ZeN, Watcom | — |
 | **16** | **`nnt`** | **Full demo: Neru No Toki** | **EXEL.XM → ALMA_DEL.XM** | **ZeN 1999** | — |
 
+## Port and fidelity
+
+The goal of the port is effect fidelity, not hardware-exact emulation. For the shared effects, this is the practical translation from late-90s DOS code to modern SDL2:
+
+| Original DOS world | Modern port | What stayed faithful |
+|---|---|---|
+| VGA Mode 13h / Mode X / PTC framebuffer code | SDL2 software framebuffer + texture upload | The effect logic, layering, and overall screen look |
+| Hardware palette writes, DAC tricks, page flipping | Software palette conversion and modern presentation | Palette-driven fades, flames, fake lighting, and indexed-color behavior |
+| VBL polling and CPU-speed-dependent pacing | SDL timing and VSync where available | Scene flow and interaction, without pretending to match old hardware timing cycle-for-cycle |
+| Inline x86 assembly inner loops | Portable C99 rewrites | The same algorithms and dataflow, but not the original instruction stream |
+| DOS4GW, BIOS calls, direct hardware access | Native host process + SDL2 abstractions | The same software-rendered mindset, without DOS-specific plumbing |
+| MIDAS / USMPlay playback under DOS | SDL2_mixer music playback | The original tracker modules and their role in timing and atmosphere |
+| Shared effect code tied to one DOS codebase and lots of globals | Shared portable helpers and per-demo integration | The same bag of tricks: lookup tables, low-res shortcuts, fixed-point style thinking, and software rendering |
+| DOS input paths such as `kbhit()`, `getch()`, `inp(0x60)`, `int 33h` | SDL keyboard and mouse events | The interactive behavior of the original effects |
+| Original PCX loading and asset formats | Portable loaders in the framework | The original textures, images, and demo assets |
+
+So the target is "same effect, same spirit, same tricks", not a cycle-perfect clone of a 1999 DOS PC.
+
 ## Project structure
 
 ```
@@ -135,47 +139,19 @@ CMakeLists.txt
 LICENSE
 ```
 
-## What was ported and how
+## Run
 
-| DOS original | SDL2 replacement |
-|---|---|
-| VGA Mode 13h (`int 10h`, `0xA0000`) | SDL2 window + ARGB8888 texture |
-| Mode X (unchained VGA, page flipping) | Same SDL2 framebuffer |
-| PTC 0.60 truecolor library | Same SDL2 framebuffer |
-| DOS4GW 32-bit extender | Not needed (native 64-bit) |
-| VBL sync (`in al,0x3DA`) | SDL2 VSync (`SDL_RENDERER_PRESENTVSYNC`) |
-| VGA palette DAC (`out 0x3C8`) | Software palette → ARGB conversion |
-| Inline x86 assembly | Rewritten in plain C99 |
-| MIDAS Sound System (.XM) | SDL2_mixer `Mix_LoadMUS` / `Mix_PlayMusic` |
-| USMPlay (.XM) | SDL2_mixer |
-| `kbhit()` / `getch()` / `inp(0x60)` | `SDL_PollEvent` / `SDL_GetKeyboardState` |
-| `int 33h` mouse driver | `SDL_GetMouseState` |
-| Turbo C `lib13h.h` / `modex.h` | `demo_framework.h` |
-| PCX image loading | `load_pcx()` in framework |
+Each demo is a standalone executable. **Run from the repo root** (or make sure the `data/` folder is next to the executable) so the music files are found.
 
-### Fidelity note
+```bash
+# Linux / WSL / macOS
+./build/01_flames
 
-The port aims for effect fidelity, not hardware-exact emulation. For the shared effects, here is what changed and what stayed:
+# Windows
+build\Release\01_flames.exe
+```
 
-| Original DOS world | Modern port | What stayed faithful |
-|---|---|---|
-| VGA / Mode X / PTC framebuffer code | SDL2 software framebuffer + texture upload | The effect logic, screen composition, and overall look |
-| Hardware palette writes and page flipping | Software palette conversion and modern presentation | Palette-driven rendering ideas, fades, flames, and indexed-color style behavior |
-| VBL polling and CPU-speed-dependent pacing | SDL timing and VSync where available | Scene flow and interactive behavior, without pretending to match old hardware timing exactly |
-| Inline x86 assembly inner loops | Portable C99 rewrites | Same algorithms and dataflow, but not the exact original instruction stream |
-| DOS sound drivers and interrupt-driven playback | SDL2_mixer music playback | The original tracker modules and their role in the demo structure |
-| Shared effect code tied to one DOS codebase and global state | Shared portable helpers and per-demo integration | The same family of tricks: lookup tables, low-res shortcuts, fixed-point style thinking, and software rendering |
-
-So the target is "same effect, same spirit, same bag of tricks", not a cycle-perfect clone of a 1999 DOS PC.
-
-## Credits
-
-- **WondY** / **ZeN** — original DOS code and music (1996–1999)
-- SDL2 port — 2026
-
-## License
-
-[MIT](LICENSE)
+Press **Escape** to quit any demo.
 
 ## Build
 
@@ -216,3 +192,12 @@ brew install sdl2 sdl2_mixer cmake
 cmake -B build
 cmake --build build
 ```
+
+## Credits
+
+- **WondY** / **ZeN** — original DOS code and music (1996–1999)
+- SDL2 port — 2026
+
+## License
+
+[MIT](LICENSE)
