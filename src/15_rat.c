@@ -9,11 +9,6 @@
 #define MAZE_W (LOGICAL_W + 2)
 #define MAZE_H (LOGICAL_H + 2)
 
-#define DROITE  1
-#define GAUCHE -1
-#define HAUT   -1
-#define BAS     1
-
 typedef struct { int x, y; } Mobile;
 
 short maze[MAZE_W * MAZE_H];      // maze layout
@@ -26,6 +21,23 @@ int deplx = 1, deply = 0;
 
 static inline int maze_idx(int x, int y) {
     return y * MAZE_W + x;
+}
+
+static inline short maze_at_logical(int x, int y) {
+    return maze[maze_idx(x + 1, y + 1)];
+}
+
+static int ray_len(int x, int y, int dx, int dy) {
+    int len = 0;
+    x += dx;
+    y += dy;
+    while (x >= 0 && x < LOGICAL_W && y >= 0 && y < LOGICAL_H) {
+        if (maze_at_logical(x, y) != 1) break;
+        len++;
+        x += dx;
+        y += dy;
+    }
+    return len;
 }
 
 void generate_maze(void) {
@@ -76,40 +88,48 @@ void generate_maze(void) {
 }
 
 void calc_movement(void) {
-    int td = 0, tg = 0, th = 0, tb = 0;
+    const int dirx[4] = { 1, -1, 0, 0 };
+    const int diry[4] = { 0, 0, 1, -1 };
+    int score[4];
 
-    // Look in each direction for walls
-    for (int x = rat.x + 1; x <= LOGICAL_W; x++) {
-        int idx = maze_idx(x + 1, rat.y + 1);
-        if (maze[idx] == 1 || td <= 0) td += maze[idx];
-        else break;
-    }
-    for (int x = rat.x - 1; x >= -1; x--) {
-        int idx = maze_idx(x + 1, rat.y + 1);
-        if (maze[idx] == 1 || tg <= 0) tg += maze[idx];
-        else break;
-    }
-    for (int y = rat.y + 1; y <= LOGICAL_H; y++) {
-        int idx = maze_idx(rat.x + 1, y + 1);
-        if (maze[idx] == 1 || tb <= 0) tb += maze[idx];
-        else break;
-    }
-    for (int y = rat.y - 1; y >= -1; y--) {
-        int idx = maze_idx(rat.x + 1, y + 1);
-        if (maze[idx] == 1 || th <= 0) th += maze[idx];
-        else break;
+    // Estimate space in each direction.
+    score[0] = ray_len(rat.x, rat.y, 1, 0);   // right
+    score[1] = ray_len(rat.x, rat.y, -1, 0);  // left
+    score[2] = ray_len(rat.x, rat.y, 0, 1);   // down
+    score[3] = ray_len(rat.x, rat.y, 0, -1);  // up
+
+    // Keep some momentum to avoid tiny local loops.
+    for (int i = 0; i < 4; i++) {
+        if (dirx[i] == deplx && diry[i] == deply) score[i] += 2;
+        if (dirx[i] == -deplx && diry[i] == -deply) score[i] -= 2;
     }
 
-    // Scale vertical to match aspect ratio
-    tb = (int)((float)tb * (float)LOGICAL_W / (float)LOGICAL_H);
-    th = (int)((float)th * (float)LOGICAL_W / (float)LOGICAL_H);
+    int best = -9999;
+    int candidates[4];
+    int candidate_count = 0;
+    for (int i = 0; i < 4; i++) {
+        int nx = rat.x + dirx[i];
+        int ny = rat.y + diry[i];
+        if (nx < 0 || nx >= LOGICAL_W || ny < 0 || ny >= LOGICAL_H) continue;
+        if (maze_at_logical(nx, ny) != 1) continue;
 
-    if (td > tg) deplx = DROITE;
-    if (td < tg) deplx = GAUCHE;
-    if (th > tb) deply = HAUT;
-    if (th < tb) deply = BAS;
-    if (td == tg) deplx = (rand() % 100 < 50) ? DROITE : GAUCHE;
-    if (th == tb) deply = (rand() % 100 < 50) ? BAS : HAUT;
+        if (score[i] > best) {
+            best = score[i];
+            candidate_count = 0;
+            candidates[candidate_count++] = i;
+        } else if (score[i] == best) {
+            candidates[candidate_count++] = i;
+        }
+    }
+
+    if (candidate_count > 0) {
+        int choice = candidates[rand() % candidate_count];
+        deplx = dirx[choice];
+        deply = diry[choice];
+    } else {
+        deplx = 0;
+        deply = 0;
+    }
 }
 
 int main(int argc, char *argv[]) {
