@@ -77,22 +77,20 @@ int main(int argc, char *argv[]) {
     unsigned y_adder = 0;
 
     while (demo_poll(ctx)) {
-        // Render tunnel (symmetric from center)
-        for (int i = 0; i < TW * TH / 2; i++) {
-            int mirror = TW * TH - 1 - i;
-            unsigned char tx = angles[i] + (unsigned char)x_adder;
-            unsigned char ty = depth_map[i] + (unsigned char)y_adder;
-            int tex_idx = ((ty & (TEX_SIZE - 1)) * TEX_SIZE) + (tx & (TEX_SIZE - 1));
-            unsigned char c = texture[tex_idx];
+        // Render tunnel with direct per-pixel lookup from precalculated tables
+        for (int y = 0; y < TH; y++) {
+            for (int x = 0; x < TW; x++) {
+                int idx = y * TW + x;
+                unsigned char tx = angles[idx] + (unsigned char)x_adder;
+                unsigned char ty = depth_map[idx] + (unsigned char)y_adder;
+                int tex_idx = ((ty & (TEX_SIZE - 1)) * TEX_SIZE) + (tx & (TEX_SIZE - 1));
+                unsigned char c = texture[tex_idx];
 
-            int r = palette[c * 3] * 4; if (r > 255) r = 255;
-            int g = palette[c * 3 + 1] * 4; if (g > 255) g = 255;
-            int b = palette[c * 3 + 2] * 4; if (b > 255) b = 255;
-            Uint32 col = RGB32(r, g, b);
-
-            ctx->pixels[i] = col;
-            if (mirror >= 0 && mirror < TW * TH)
-                ctx->pixels[mirror] = col;
+                int r = palette[c * 3] * 4; if (r > 255) r = 255;
+                int g = palette[c * 3 + 1] * 4; if (g > 255) g = 255;
+                int b = palette[c * 3 + 2] * 4; if (b > 255) b = 255;
+                ctx->pixels[idx] = RGB32(r, g, b);
+            }
         }
 
         x_adder += 3;
