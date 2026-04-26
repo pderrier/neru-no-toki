@@ -24,19 +24,41 @@ int main(int argc, char *argv[]) {
     unsigned char buffer[320 * 200];
     memset(buffer, 0, sizeof(buffer));
 
-    unsigned n = 4;
+    unsigned n = 64;      // effective complexity (can still be tweaked with +/-)
     float x0 = 0.0f;
+    unsigned frame = 0;
 
     while (demo_poll(ctx)) {
-        // Compute bifurcation diagram
-        for (float a = 0.0f; a < 4.0f; a += 4.0f / 320.0f) {
-            float y = x0;
-            for (unsigned c = 0; c < n; c++) {
+        // Gentle persistence/fade to keep trails while avoiding full white-out.
+        if ((frame & 3u) == 0) {
+            for (int i = 0; i < 320 * 200; i++) {
+                if (buffer[i] > 0) buffer[i]--;
+            }
+        }
+
+        // Auto-ramp detail for a denser image during startup.
+        if ((frame % 20u) == 0u && n < 192) n++;
+
+        // Compute bifurcation diagram (standalone logistic-map mode).
+        for (int px = 0; px < 320; px++) {
+            float a = (4.0f * (float)px) / 319.0f;
+            float y = x0 + (float)px * 0.003137f;
+            while (y >= 1.0f) y -= 1.0f;
+
+            unsigned transient = n * 8u + 96u;
+            for (unsigned c = 0; c < transient; c++) {
                 y = a * y * (1.0f - y);
-                int px = (int)(a * 80.0f);
-                int py = 200 - (int)(y * 199.0f);
-                if (px >= 0 && px < 320 && py >= 0 && py < 200)
-                    buffer[py * 320 + px] = 200;
+            }
+
+            unsigned samples = (n >> 2) + 16u;
+            for (unsigned c = 0; c < samples; c++) {
+                y = a * y * (1.0f - y);
+                int py = 199 - (int)(y * 199.0f);
+                if (py >= 0 && py < 200) {
+                    int idx = py * 320 + px;
+                    unsigned int v = (unsigned int)buffer[idx] + 12u;
+                    buffer[idx] = (unsigned char)(v > 255u ? 255u : v);
+                }
             }
         }
 
@@ -50,16 +72,15 @@ int main(int argc, char *argv[]) {
         }
         demo_update(ctx);
 
-        x0 += 0.003f;
-        if (x0 >= 1.0f) {
-            x0 = 0.0f;
-            memset(buffer, 0, sizeof(buffer));
-        }
+        x0 += 0.007f;
+        if (x0 >= 1.0f) x0 -= 1.0f;
+
+        frame++;
 
         // Handle +/- to change iteration count
         const Uint8 *keys = SDL_GetKeyboardState(NULL);
-        if (keys[SDL_SCANCODE_KP_PLUS] || keys[SDL_SCANCODE_EQUALS]) { n++; memset(buffer, 0, sizeof(buffer)); SDL_Delay(100); }
-        if (keys[SDL_SCANCODE_KP_MINUS] || keys[SDL_SCANCODE_MINUS]) { if (n > 1) n--; memset(buffer, 0, sizeof(buffer)); SDL_Delay(100); }
+        if (keys[SDL_SCANCODE_KP_PLUS] || keys[SDL_SCANCODE_EQUALS]) { if (n < 512) n++; SDL_Delay(100); }
+        if (keys[SDL_SCANCODE_KP_MINUS] || keys[SDL_SCANCODE_MINUS]) { if (n > 8) n--; SDL_Delay(100); }
     }
 
     demo_stop_music();
