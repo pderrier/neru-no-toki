@@ -102,7 +102,6 @@ void draw_line(Uint32 *pixels, int x0, int y0, int x1, int y1, int hy, int s) {
         h0 = (h0 << 8) + a * (h1 - h0);
         h2 = (h2 << 8) + a * (h3 - h2);
         int cfp = (h0 << 8) + b * (h2 - h0);
-        int c = cfp >> 16;
             if (lastc[i] == -1) lastc[i] = cfp;
             int sc = (la != y) ? (cfp - lastc[i]) / (la - y) : 0;
         lastc[i] = cfp;
