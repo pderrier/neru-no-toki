@@ -101,10 +101,11 @@ void draw_line(Uint32 *pixels, int x0, int y0, int x1, int y1, int hy, int s) {
         h1 = CMap[u1 + v0]; h3 = CMap[u1 + v1];
         h0 = (h0 << 8) + a * (h1 - h0);
         h2 = (h2 << 8) + a * (h3 - h2);
-        int c = ((h0 << 8) + b * (h2 - h0)) >> 16;
-        int cfp = c << 16;
-
-        int y = (((h - hy) * s) >> 11) + 100;
+        int cfp = (h0 << 8) + b * (h2 - h0);
+        int c = cfp >> 16;
+            if (lastc[i] == -1) lastc[i] = cfp;
+            int sc = (la != y) ? (cfp - lastc[i]) / (la - y) : 0;
+        lastc[i] = cfp;
 
         int la = lasty[i];
         if (y < la) {
