@@ -4,20 +4,21 @@
 
 #include "demo_framework.h"
 
-#define MW 320
-#define MH 200
-
-#define DROITE  1
-#define GAUCHE -1
-#define HAUT   -1
-#define BAS     1
+#define LOGICAL_W 320
+#define LOGICAL_H 200
+#define MAZE_W (LOGICAL_W + 2)
+#define MAZE_H (LOGICAL_H + 2)
+#define MAZE_SIZE (MAZE_W * MAZE_H)
+#define LOGICAL_SIZE (LOGICAL_W * LOGICAL_H)
+#define MAZE_IDX(x, y) ((y) * MAZE_W + (x))
+#define MAZE_AT_LOGICAL(x, y) maze[MAZE_IDX((x) + 1, (y) + 1)]
 
 typedef struct { int x, y; } Mobile;
 
-short maze[322 * 202];     // maze layout
-short maze_orig[322 * 202]; // original copy
-unsigned int visit_count[MW * MH];
-unsigned char display[MW * MH];
+short maze[MAZE_SIZE];      // maze layout
+short maze_orig[MAZE_SIZE]; // original copy
+unsigned int visit_count[LOGICAL_SIZE];
+unsigned char display[LOGICAL_SIZE];
 
 Mobile rat;
 int deplx = 1, deply = 0;
@@ -27,33 +28,33 @@ void generate_maze(void) {
     memset(maze, 0, sizeof(maze));
 
     // Walls
-    for (int y = 0; y < 202; y++)
-        for (int x = 0; x < 322; x++) {
-            int idx = y * 320 + x;
-            if (idx < 0 || idx >= 322 * 202) continue;
-            maze[idx] = 1; // default: walkable
-        }
+    for (int y = 0; y < MAZE_H; y++)
+        for (int x = 0; x < MAZE_W; x++)
+            maze[MAZE_IDX(x, y)] = 1; // default: walkable
 
     // Border walls
-    for (int x = 0; x < 322; x++) {
-        maze[x] = -1;
-        maze[201 * 320 + x] = -1;
+    for (int x = 0; x < MAZE_W; x++) {
+        maze[MAZE_IDX(x, 0)] = -1;
+        maze[MAZE_IDX(x, MAZE_H - 1)] = -1;
     }
-    for (int y = 0; y < 202; y++) {
-        maze[y * 320] = -1;
-        maze[y * 320 + 321] = -1;
+    for (int y = 0; y < MAZE_H; y++) {
+        maze[MAZE_IDX(0, y)] = -1;
+        maze[MAZE_IDX(MAZE_W - 1, y)] = -1;
     }
 
     // Internal walls (create a simple maze pattern)
-    for (int y = 20; y < 180; y += 40)
-        for (int x = 20; x < 300; x++)
-            if ((x % 80) < 60)
-                maze[(y + 321) ] = -1, maze[y * 320 + x + 321] = -1;
+    for (int y = 20; y < 180; y += 40) {
+        for (int x = 20; x < 300; x++) {
+            if ((x % 80) < 60) {
+                maze[MAZE_IDX(x + 1, y + 1)] = -1;
+            }
+        }
+    }
 
     for (int x = 40; x < 280; x += 60)
         for (int y = 40; y < 180; y++)
             if ((y % 60) < 40)
-                maze[y * 320 + x + 321] = -1;
+                maze[MAZE_IDX(x + 1, y + 1)] = -1;
 
     // Some random obstacles
     srand(42);
@@ -62,63 +63,95 @@ void generate_maze(void) {
         int y = rand() % 180 + 10;
         for (int dy = 0; dy < 5; dy++)
             for (int dx = 0; dx < 5; dx++)
-                if ((y + dy) * 320 + x + dx + 321 < 322 * 202)
-                    maze[(y + dy) * 320 + x + dx + 321] = -1;
+                if (x + dx < LOGICAL_W && y + dy < LOGICAL_H)
+                    maze[MAZE_IDX(x + dx + 1, y + dy + 1)] = -1;
     }
 
     memcpy(maze_orig, maze, sizeof(maze));
 }
 
 void calc_movement(void) {
-    int td = 0, tg = 0, th = 0, tb = 0;
+    int score_r = 0, score_l = 0, score_d = 0, score_u = 0;
+    int x, y;
+    int best, count, pick;
+    int candidates[4];
 
-    // Look in each direction for walls
-    for (int x = rat.x + 1; x <= 320; x++) {
-        int idx = x + rat.y * 320 + 321;
-        if (idx >= 0 && idx < 322 * 202) {
-            if (maze[idx] == 1 || td <= 0) td += maze[idx];
-            else break;
-        } else break;
+    // Right ray
+    y = rat.y + 1;
+    for (x = rat.x + 2; x <= LOGICAL_W; x++) {
+        if (maze[MAZE_IDX(x, y)] != 1) break;
+        score_r++;
     }
-    for (int x = rat.x - 1; x >= -1; x--) {
-        int idx = x + rat.y * 320 + 321;
-        if (idx >= 0 && idx < 322 * 202) {
-            if (maze[idx] == 1 || tg <= 0) tg += maze[idx];
-            else break;
-        } else break;
+    // Left ray
+    for (x = rat.x; x >= 1; x--) {
+        if (maze[MAZE_IDX(x, y)] != 1) break;
+        score_l++;
     }
-    for (int y = rat.y + 1; y <= 201; y++) {
-        int idx = y * 320 + rat.x + 321;
-        if (idx >= 0 && idx < 322 * 202) {
-            if (maze[idx] == 1 || tb <= 0) tb += maze[idx];
-            else break;
-        } else break;
+    // Down ray
+    x = rat.x + 1;
+    for (y = rat.y + 2; y <= LOGICAL_H; y++) {
+        if (maze[MAZE_IDX(x, y)] != 1) break;
+        score_d++;
     }
-    for (int y = rat.y - 1; y >= -1; y--) {
-        int idx = y * 320 + rat.x + 321;
-        if (idx >= 0 && idx < 322 * 202) {
-            if (maze[idx] == 1 || th <= 0) th += maze[idx];
-            else break;
-        } else break;
+    // Up ray
+    for (y = rat.y; y >= 1; y--) {
+        if (maze[MAZE_IDX(x, y)] != 1) break;
+        score_u++;
     }
 
-    // Scale vertical to match aspect ratio
-    tb = (int)((float)tb * 320.0f / 200.0f);
-    th = (int)((float)th * 320.0f / 200.0f);
+    // Keep some momentum, avoid instant U-turn.
+    if (deplx == 1) score_r += 2;
+    if (deplx == -1) score_l += 2;
+    if (deply == 1) score_d += 2;
+    if (deply == -1) score_u += 2;
+    if (deplx == 1) score_l -= 2;
+    if (deplx == -1) score_r -= 2;
+    if (deply == 1) score_u -= 2;
+    if (deply == -1) score_d -= 2;
 
-    if (td > tg) deplx = DROITE;
-    if (td < tg) deplx = GAUCHE;
-    if (th > tb) deply = HAUT;
-    if (th < tb) deply = BAS;
-    if (td == tg) deplx = (rand() % 100 < 50) ? DROITE : GAUCHE;
-    if (th == tb) deply = (rand() % 100 < 50) ? BAS : HAUT;
+    best = -32768;
+    count = 0;
+
+    // Right
+    if (rat.x + 1 < LOGICAL_W && MAZE_AT_LOGICAL(rat.x + 1, rat.y) == 1) {
+        if (score_r > best) { best = score_r; count = 0; candidates[count++] = 0; }
+        else if (score_r == best) candidates[count++] = 0;
+    }
+    // Left
+    if (rat.x - 1 >= 0 && MAZE_AT_LOGICAL(rat.x - 1, rat.y) == 1) {
+        if (score_l > best) { best = score_l; count = 0; candidates[count++] = 1; }
+        else if (score_l == best) candidates[count++] = 1;
+    }
+    // Down
+    if (rat.y + 1 < LOGICAL_H && MAZE_AT_LOGICAL(rat.x, rat.y + 1) == 1) {
+        if (score_d > best) { best = score_d; count = 0; candidates[count++] = 2; }
+        else if (score_d == best) candidates[count++] = 2;
+    }
+    // Up
+    if (rat.y - 1 >= 0 && MAZE_AT_LOGICAL(rat.x, rat.y - 1) == 1) {
+        if (score_u > best) { best = score_u; count = 0; candidates[count++] = 3; }
+        else if (score_u == best) candidates[count++] = 3;
+    }
+
+    if (count <= 0) {
+        deplx = 0;
+        deply = 0;
+        return;
+    }
+
+    pick = candidates[rand() % count];
+    if (pick == 0) { deplx = 1;  deply = 0; return; }
+    if (pick == 1) { deplx = -1; deply = 0; return; }
+    if (pick == 2) { deplx = 0;  deply = 1; return; }
+    deplx = 0;
+    deply = -1;
 }
 
 int main(int argc, char *argv[]) {
     (void)argc; (void)argv;
     srand((unsigned)time(NULL));
 
-    DemoContext *ctx = demo_init("RAT - WondY / ZeN", MW, MH);
+    DemoContext *ctx = demo_init("RAT - WondY / ZeN", LOGICAL_W, LOGICAL_H);
     if (!ctx) return 1;
 
     Mix_Music *music = demo_load_music("data/ZINZIN.XM");
@@ -130,9 +163,10 @@ int main(int argc, char *argv[]) {
 
     while (demo_poll(ctx)) {
         // Render maze
-        for (int i = 0; i < MW * MH; i++) {
-            int idx = i + 321;
-            if (idx >= 0 && idx < 322 * 202) {
+        for (int y = 0; y < LOGICAL_H; y++) {
+            for (int x = 0; x < LOGICAL_W; x++) {
+                int i = y * LOGICAL_W + x;
+                int idx = MAZE_IDX(x + 1, y + 1);
                 if (maze_orig[idx] == -1)
                     display[i] = 128; // wall
                 else
@@ -141,27 +175,27 @@ int main(int argc, char *argv[]) {
         }
 
         // Draw rat trail (heat map)
-        for (int y = 0; y < MH; y++) {
-            for (int x = 0; x < MW; x++) {
-                unsigned int v = visit_count[x + y * MW];
+        for (int y = 0; y < LOGICAL_H; y++) {
+            for (int x = 0; x < LOGICAL_W; x++) {
+                unsigned int v = visit_count[x + y * LOGICAL_W];
                 if (v > 0) {
                     int c = (int)(v * 4);
                     if (c > 60) c = 60;
-                    display[y * MW + x] = (unsigned char)(30 + c);
+                    display[y * LOGICAL_W + x] = (unsigned char)(30 + c);
                 }
             }
         }
 
         // Draw rat
-        if (rat.x >= 0 && rat.x < MW - 1 && rat.y >= 0 && rat.y < MH - 1) {
-            display[rat.y * MW + rat.x] = 255;
-            display[rat.y * MW + rat.x + 1] = 255;
-            display[(rat.y + 1) * MW + rat.x] = 255;
-            display[(rat.y + 1) * MW + rat.x + 1] = 255;
+        if (rat.x >= 0 && rat.x < LOGICAL_W - 1 && rat.y >= 0 && rat.y < LOGICAL_H - 1) {
+            display[rat.y * LOGICAL_W + rat.x] = 255;
+            display[rat.y * LOGICAL_W + rat.x + 1] = 255;
+            display[(rat.y + 1) * LOGICAL_W + rat.x] = 255;
+            display[(rat.y + 1) * LOGICAL_W + rat.x + 1] = 255;
         }
 
         // Render to screen
-        for (int i = 0; i < MW * MH; i++) {
+        for (int i = 0; i < LOGICAL_W * LOGICAL_H; i++) {
             unsigned char c = display[i];
             if (c == 128)
                 ctx->pixels[i] = RGB32(80, 80, 120); // wall
@@ -181,16 +215,16 @@ int main(int argc, char *argv[]) {
             rat.x += deplx;
             rat.y += deply;
             if (rat.x <= 0) rat.x = 1;
-            if (rat.x >= MW) rat.x = MW - 1;
+            if (rat.x >= LOGICAL_W) rat.x = LOGICAL_W - 1;
             if (rat.y <= 0) rat.y = 1;
-            if (rat.y >= MH - 1) rat.y = MH - 2;
+            if (rat.y >= LOGICAL_H - 1) rat.y = LOGICAL_H - 2;
 
-            if (rat.x >= 0 && rat.x < MW && rat.y >= 0 && rat.y < MH)
-                visit_count[rat.x + rat.y * MW]++;
+            if (rat.x >= 0 && rat.x < LOGICAL_W && rat.y >= 0 && rat.y < LOGICAL_H)
+                visit_count[rat.x + rat.y * LOGICAL_W]++;
 
             // Reset if stuck (visited too many times)
-            if (rat.x >= 0 && rat.x < MW && rat.y >= 0 && rat.y < MH) {
-                if (visit_count[rat.x + rat.y * MW] > 50) {
+            if (rat.x >= 0 && rat.x < LOGICAL_W && rat.y >= 0 && rat.y < LOGICAL_H) {
+                if (visit_count[rat.x + rat.y * LOGICAL_W] > 50) {
                     memcpy(maze, maze_orig, sizeof(maze));
                     memset(visit_count, 0, sizeof(visit_count));
                 }
