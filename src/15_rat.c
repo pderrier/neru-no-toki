@@ -8,37 +8,20 @@
 #define LOGICAL_H 200
 #define MAZE_W (LOGICAL_W + 2)
 #define MAZE_H (LOGICAL_H + 2)
+#define MAZE_SIZE (MAZE_W * MAZE_H)
+#define LOGICAL_SIZE (LOGICAL_W * LOGICAL_H)
+#define MAZE_IDX(x, y) ((y) * MAZE_W + (x))
+#define MAZE_AT_LOGICAL(x, y) maze[MAZE_IDX((x) + 1, (y) + 1)]
 
 typedef struct { int x, y; } Mobile;
 
-short maze[MAZE_W * MAZE_H];      // maze layout
-short maze_orig[MAZE_W * MAZE_H]; // original copy
-unsigned int visit_count[LOGICAL_W * LOGICAL_H];
-unsigned char display[LOGICAL_W * LOGICAL_H];
+short maze[MAZE_SIZE];      // maze layout
+short maze_orig[MAZE_SIZE]; // original copy
+unsigned int visit_count[LOGICAL_SIZE];
+unsigned char display[LOGICAL_SIZE];
 
 Mobile rat;
 int deplx = 1, deply = 0;
-
-static inline int maze_idx(int x, int y) {
-    return y * MAZE_W + x;
-}
-
-static inline short maze_at_logical(int x, int y) {
-    return maze[maze_idx(x + 1, y + 1)];
-}
-
-static int ray_len(int x, int y, int dx, int dy) {
-    int len = 0;
-    x += dx;
-    y += dy;
-    while (x >= 0 && x < LOGICAL_W && y >= 0 && y < LOGICAL_H) {
-        if (maze_at_logical(x, y) != 1) break;
-        len++;
-        x += dx;
-        y += dy;
-    }
-    return len;
-}
 
 void generate_maze(void) {
     // Generate a procedural maze
@@ -47,23 +30,23 @@ void generate_maze(void) {
     // Walls
     for (int y = 0; y < MAZE_H; y++)
         for (int x = 0; x < MAZE_W; x++)
-            maze[maze_idx(x, y)] = 1; // default: walkable
+            maze[MAZE_IDX(x, y)] = 1; // default: walkable
 
     // Border walls
     for (int x = 0; x < MAZE_W; x++) {
-        maze[maze_idx(x, 0)] = -1;
-        maze[maze_idx(x, MAZE_H - 1)] = -1;
+        maze[MAZE_IDX(x, 0)] = -1;
+        maze[MAZE_IDX(x, MAZE_H - 1)] = -1;
     }
     for (int y = 0; y < MAZE_H; y++) {
-        maze[maze_idx(0, y)] = -1;
-        maze[maze_idx(MAZE_W - 1, y)] = -1;
+        maze[MAZE_IDX(0, y)] = -1;
+        maze[MAZE_IDX(MAZE_W - 1, y)] = -1;
     }
 
     // Internal walls (create a simple maze pattern)
     for (int y = 20; y < 180; y += 40) {
         for (int x = 20; x < 300; x++) {
             if ((x % 80) < 60) {
-                maze[maze_idx(x + 1, y + 1)] = -1;
+                maze[MAZE_IDX(x + 1, y + 1)] = -1;
             }
         }
     }
@@ -71,7 +54,7 @@ void generate_maze(void) {
     for (int x = 40; x < 280; x += 60)
         for (int y = 40; y < 180; y++)
             if ((y % 60) < 40)
-                maze[maze_idx(x + 1, y + 1)] = -1;
+                maze[MAZE_IDX(x + 1, y + 1)] = -1;
 
     // Some random obstacles
     srand(42);
@@ -81,55 +64,87 @@ void generate_maze(void) {
         for (int dy = 0; dy < 5; dy++)
             for (int dx = 0; dx < 5; dx++)
                 if (x + dx < LOGICAL_W && y + dy < LOGICAL_H)
-                    maze[maze_idx(x + dx + 1, y + dy + 1)] = -1;
+                    maze[MAZE_IDX(x + dx + 1, y + dy + 1)] = -1;
     }
 
     memcpy(maze_orig, maze, sizeof(maze));
 }
 
 void calc_movement(void) {
-    const int dirx[4] = { 1, -1, 0, 0 };
-    const int diry[4] = { 0, 0, 1, -1 };
-    int score[4];
-
-    // Estimate space in each direction.
-    score[0] = ray_len(rat.x, rat.y, 1, 0);   // right
-    score[1] = ray_len(rat.x, rat.y, -1, 0);  // left
-    score[2] = ray_len(rat.x, rat.y, 0, 1);   // down
-    score[3] = ray_len(rat.x, rat.y, 0, -1);  // up
-
-    // Keep some momentum to avoid tiny local loops.
-    for (int i = 0; i < 4; i++) {
-        if (dirx[i] == deplx && diry[i] == deply) score[i] += 2;
-        if (dirx[i] == -deplx && diry[i] == -deply) score[i] -= 2;
-    }
-
-    int best = -9999;
+    int score_r = 0, score_l = 0, score_d = 0, score_u = 0;
+    int x, y;
+    int best, count, pick;
     int candidates[4];
-    int candidate_count = 0;
-    for (int i = 0; i < 4; i++) {
-        int nx = rat.x + dirx[i];
-        int ny = rat.y + diry[i];
-        if (nx < 0 || nx >= LOGICAL_W || ny < 0 || ny >= LOGICAL_H) continue;
-        if (maze_at_logical(nx, ny) != 1) continue;
 
-        if (score[i] > best) {
-            best = score[i];
-            candidate_count = 0;
-            candidates[candidate_count++] = i;
-        } else if (score[i] == best) {
-            candidates[candidate_count++] = i;
-        }
+    // Right ray
+    y = rat.y + 1;
+    for (x = rat.x + 2; x <= LOGICAL_W; x++) {
+        if (maze[MAZE_IDX(x, y)] != 1) break;
+        score_r++;
+    }
+    // Left ray
+    for (x = rat.x; x >= 1; x--) {
+        if (maze[MAZE_IDX(x, y)] != 1) break;
+        score_l++;
+    }
+    // Down ray
+    x = rat.x + 1;
+    for (y = rat.y + 2; y <= LOGICAL_H; y++) {
+        if (maze[MAZE_IDX(x, y)] != 1) break;
+        score_d++;
+    }
+    // Up ray
+    for (y = rat.y; y >= 1; y--) {
+        if (maze[MAZE_IDX(x, y)] != 1) break;
+        score_u++;
     }
 
-    if (candidate_count > 0) {
-        int choice = candidates[rand() % candidate_count];
-        deplx = dirx[choice];
-        deply = diry[choice];
-    } else {
+    // Keep some momentum, avoid instant U-turn.
+    if (deplx == 1) score_r += 2;
+    if (deplx == -1) score_l += 2;
+    if (deply == 1) score_d += 2;
+    if (deply == -1) score_u += 2;
+    if (deplx == 1) score_l -= 2;
+    if (deplx == -1) score_r -= 2;
+    if (deply == 1) score_u -= 2;
+    if (deply == -1) score_d -= 2;
+
+    best = -32768;
+    count = 0;
+
+    // Right
+    if (rat.x + 1 < LOGICAL_W && MAZE_AT_LOGICAL(rat.x + 1, rat.y) == 1) {
+        if (score_r > best) { best = score_r; count = 0; candidates[count++] = 0; }
+        else if (score_r == best) candidates[count++] = 0;
+    }
+    // Left
+    if (rat.x - 1 >= 0 && MAZE_AT_LOGICAL(rat.x - 1, rat.y) == 1) {
+        if (score_l > best) { best = score_l; count = 0; candidates[count++] = 1; }
+        else if (score_l == best) candidates[count++] = 1;
+    }
+    // Down
+    if (rat.y + 1 < LOGICAL_H && MAZE_AT_LOGICAL(rat.x, rat.y + 1) == 1) {
+        if (score_d > best) { best = score_d; count = 0; candidates[count++] = 2; }
+        else if (score_d == best) candidates[count++] = 2;
+    }
+    // Up
+    if (rat.y - 1 >= 0 && MAZE_AT_LOGICAL(rat.x, rat.y - 1) == 1) {
+        if (score_u > best) { best = score_u; count = 0; candidates[count++] = 3; }
+        else if (score_u == best) candidates[count++] = 3;
+    }
+
+    if (count <= 0) {
         deplx = 0;
         deply = 0;
+        return;
     }
+
+    pick = candidates[rand() % count];
+    if (pick == 0) { deplx = 1;  deply = 0; return; }
+    if (pick == 1) { deplx = -1; deply = 0; return; }
+    if (pick == 2) { deplx = 0;  deply = 1; return; }
+    deplx = 0;
+    deply = -1;
 }
 
 int main(int argc, char *argv[]) {
@@ -151,7 +166,7 @@ int main(int argc, char *argv[]) {
         for (int y = 0; y < LOGICAL_H; y++) {
             for (int x = 0; x < LOGICAL_W; x++) {
                 int i = y * LOGICAL_W + x;
-                int idx = maze_idx(x + 1, y + 1);
+                int idx = MAZE_IDX(x + 1, y + 1);
                 if (maze_orig[idx] == -1)
                     display[i] = 128; // wall
                 else
